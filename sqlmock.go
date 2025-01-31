@@ -13,7 +13,9 @@ package sqlmock
 import (
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -29,6 +31,10 @@ type SqlmockCommon interface {
 	// ExpectationsWereMet checks whether all queued expectations
 	// were met in order. If any of them was not met - an error is returned.
 	ExpectationsWereMet() error
+
+	// NoUnmatchedInvocations checks that code under test did not invoke any other SQL
+	// that was not matched by expectations
+	NoUnmatchedInvocations() error
 
 	// ExpectPrepare expects Prepare() to be called with expectedSQL query.
 	// the *ExpectedPrepare allows to mock database response.
@@ -95,7 +101,8 @@ type sqlmock struct {
 	queryMatcher QueryMatcher
 	monitorPings bool
 
-	expected []expectation
+	expected   []expectation
+	notmatched []invocation
 }
 
 func (c *sqlmock) open(options []SqlMockOption) (*sql.DB, Sqlmock, error) {
@@ -211,6 +218,23 @@ func (c *sqlmock) ExpectationsWereMet() error {
 	return nil
 }
 
+func (c *sqlmock) NoUnmatchedInvocations() error {
+	count := len(c.notmatched)
+	if count == 0 {
+		return nil
+	}
+
+	errors := make([]string, count)
+	for i, invocation := range c.notmatched {
+		args := make([]string, len(invocation.args))
+		for a, arg := range args {
+			args[a] = fmt.Sprintf("%v", arg)
+		}
+		errors[i] = fmt.Sprintf("[%d]: sql=%s \nargs=[%s]", i, invocation.sql, strings.Join(args, ","))
+	}
+	return fmt.Errorf("unexpected invocations:\n%s", strings.Join(errors, "\n"))
+}
+
 // Begin meets http://golang.org/pkg/database/sql/driver/#Conn interface
 func (c *sqlmock) Begin() (driver.Tx, error) {
 	ex, err := c.begin(driver.TxOptions{})
@@ -242,15 +266,17 @@ func (c *sqlmock) begin(opts driver.TxOptions) (*ExpectedBegin, error) {
 
 		next.Unlock()
 		if c.ordered {
+			c.notmatched = append(c.notmatched, invocation{sql: "BEGIN", args: []driver.Value{}})
 			return nil, fmt.Errorf("call to database transaction Begin, was not expected, next expectation is: %s", next)
 		}
 	}
 	if expected == nil {
 		msg := "call to database transaction Begin was not expected"
-		if fulfilled == len(c.expected) {
+		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		return nil, fmt.Errorf(msg)
+		c.notmatched = append(c.notmatched, invocation{sql: "BEGIN", args: []driver.Value{}})
+		return nil, errors.New(msg)
 	}
 	defer expected.Unlock()
 	if expected.txOpts != nil &&
@@ -310,6 +336,7 @@ func (c *sqlmock) prepare(query string) (*ExpectedPrepare, error) {
 			}
 
 			next.Unlock()
+			c.notmatched = append(c.notmatched, invocation{sql: query, args: []driver.Value{}})
 			return nil, fmt.Errorf("call to Prepare statement with query '%s', was not expected, next expectation is: %s", query, next)
 		}
 
@@ -324,9 +351,10 @@ func (c *sqlmock) prepare(query string) (*ExpectedPrepare, error) {
 
 	if expected == nil {
 		msg := "call to Prepare '%s' query was not expected"
-		if fulfilled == len(c.expected) {
+		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
+		c.notmatched = append(c.notmatched, invocation{sql: query, args: []driver.Value{}})
 		return nil, fmt.Errorf(msg, query)
 	}
 	defer expected.Unlock()
@@ -383,6 +411,7 @@ func (c *sqlmock) Commit() error {
 
 		next.Unlock()
 		if c.ordered {
+			c.notmatched = append(c.notmatched, invocation{sql: "COMMIT", args: []driver.Value{}})
 			return fmt.Errorf("call to Commit transaction, was not expected, next expectation is: %s", next)
 		}
 	}
@@ -391,7 +420,8 @@ func (c *sqlmock) Commit() error {
 		if fulfilled == len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		return fmt.Errorf(msg)
+		c.notmatched = append(c.notmatched, invocation{sql: "COMMIT", args: []driver.Value{}})
+		return errors.New(msg)
 	}
 
 	expected.triggered = true
@@ -418,15 +448,17 @@ func (c *sqlmock) Rollback() error {
 
 		next.Unlock()
 		if c.ordered {
+			c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK", args: []driver.Value{}})
 			return fmt.Errorf("call to Rollback transaction, was not expected, next expectation is: %s", next)
 		}
 	}
 	if expected == nil {
 		msg := "call to Rollback transaction was not expected"
-		if fulfilled == len(c.expected) {
+		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		return fmt.Errorf(msg)
+		c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK", args: []driver.Value{}})
+		return errors.New(msg)
 	}
 
 	expected.triggered = true

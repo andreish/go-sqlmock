@@ -17,6 +17,11 @@ type expectation interface {
 	String() string
 }
 
+type invocation struct {
+	sql  string
+	args []driver.Value
+}
+
 // common expectation struct
 // satisfies the expectation interface
 type commonExpectation struct {
