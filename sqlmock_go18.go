@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"time"
 )
 
@@ -241,11 +242,11 @@ func (c *sqlmock) query(query string, args []driver.NamedValue) (*ExpectedQuery,
 	defer expected.Unlock()
 
 	if err := c.queryMatcher.Match(expected.expectSQL, query); err != nil {
-		return nil, fmt.Errorf("Query: %v", err)
+		return nil, fmt.Errorf("Query: %v\nStack:\n%s", err, string(debug.Stack()))
 	}
 
 	if err := expected.argsMatches(args); err != nil {
-		return nil, fmt.Errorf("Query '%s', arguments do not match: %s", query, err)
+		return nil, fmt.Errorf("Query '%s', arguments do not match: %s\nStack:\n%s", query, err, string(debug.Stack()))
 	}
 
 	expected.triggered = true
@@ -254,7 +255,7 @@ func (c *sqlmock) query(query string, args []driver.NamedValue) (*ExpectedQuery,
 	}
 
 	if expected.rows == nil {
-		return nil, fmt.Errorf("Query '%s' with args %+v, must return a database/sql/driver.Rows, but it was not set for expectation %T as %+v", query, args, expected, expected)
+		return nil, fmt.Errorf("Query '%s' with args %+v, must return a database/sql/driver.Rows, but it was not set for expectation %T as %+v\nStack:\n%s", query, args, expected, expected, string(debug.Stack()))
 	}
 	return expected, nil
 }
@@ -325,11 +326,11 @@ func (c *sqlmock) exec(query string, args []driver.NamedValue) (*ExpectedExec, e
 	defer expected.Unlock()
 
 	if err := c.queryMatcher.Match(expected.expectSQL, query); err != nil {
-		return nil, fmt.Errorf("ExecQuery: %v", err)
+		return nil, fmt.Errorf("ExecQuery: %v\nStack:\n%s", err, string(debug.Stack()))
 	}
 
 	if err := expected.argsMatches(args); err != nil {
-		return nil, fmt.Errorf("ExecQuery '%s', arguments do not match: %s", query, err)
+		return nil, fmt.Errorf("ExecQuery '%s', arguments do not match: %s\nStack\n%s", query, err, string(debug.Stack()))
 	}
 
 	expected.triggered = true
