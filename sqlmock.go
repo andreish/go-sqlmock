@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -228,7 +229,7 @@ func (c *sqlmock) NoUnmatchedInvocations() error {
 	errors := make([]string, count)
 	for i, invocation := range c.notmatched {
 		value, _ := json.Marshal(invocation.args)
-		errors[i] = fmt.Sprintf("[%d]------\n\tsql='%s'\n\targs=%s\n----------\n", i, invocation.sql, string(value))
+		errors[i] = fmt.Sprintf("[%d]------\n\tsql='%s'\n\targs=%s\n\tStack:%s\n----------\n", i, invocation.sql, string(value), invocation.stack)
 	}
 	return fmt.Errorf("unexpected invocations:\n%s", strings.Join(errors, "\n"))
 }
@@ -264,7 +265,7 @@ func (c *sqlmock) begin(opts driver.TxOptions) (*ExpectedBegin, error) {
 
 		next.Unlock()
 		if c.ordered {
-			c.notmatched = append(c.notmatched, invocation{sql: "BEGIN"})
+			c.notmatched = append(c.notmatched, invocation{sql: "BEGIN", stack: string(debug.Stack())})
 			return nil, fmt.Errorf("call to database transaction Begin, was not expected, next expectation is: %s", next)
 		}
 	}
@@ -273,7 +274,7 @@ func (c *sqlmock) begin(opts driver.TxOptions) (*ExpectedBegin, error) {
 		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: "BEGIN"})
+		c.notmatched = append(c.notmatched, invocation{sql: "BEGIN", stack: string(debug.Stack())})
 		return nil, errors.New(msg)
 	}
 	defer expected.Unlock()
@@ -334,7 +335,7 @@ func (c *sqlmock) prepare(query string) (*ExpectedPrepare, error) {
 			}
 
 			next.Unlock()
-			c.notmatched = append(c.notmatched, invocation{sql: query})
+			c.notmatched = append(c.notmatched, invocation{sql: query, stack: string(debug.Stack())})
 			return nil, fmt.Errorf("call to Prepare statement with query '%s', was not expected, next expectation is: %s", query, next)
 		}
 
@@ -352,7 +353,7 @@ func (c *sqlmock) prepare(query string) (*ExpectedPrepare, error) {
 		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: query})
+		c.notmatched = append(c.notmatched, invocation{sql: query, stack: string(debug.Stack())})
 		return nil, fmt.Errorf(msg, query)
 	}
 	defer expected.Unlock()
@@ -409,7 +410,7 @@ func (c *sqlmock) Commit() error {
 
 		next.Unlock()
 		if c.ordered {
-			c.notmatched = append(c.notmatched, invocation{sql: "COMMIT"})
+			c.notmatched = append(c.notmatched, invocation{sql: "COMMIT", stack: string(debug.Stack())})
 			return fmt.Errorf("call to Commit transaction, was not expected, next expectation is: %s", next)
 		}
 	}
@@ -418,7 +419,7 @@ func (c *sqlmock) Commit() error {
 		if fulfilled == len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: "COMMIT"})
+		c.notmatched = append(c.notmatched, invocation{sql: "COMMIT", stack: string(debug.Stack())})
 		return errors.New(msg)
 	}
 
@@ -446,7 +447,7 @@ func (c *sqlmock) Rollback() error {
 
 		next.Unlock()
 		if c.ordered {
-			c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK"})
+			c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK", stack: string(debug.Stack())})
 			return fmt.Errorf("call to Rollback transaction, was not expected, next expectation is: %s", next)
 		}
 	}
@@ -455,7 +456,7 @@ func (c *sqlmock) Rollback() error {
 		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK"})
+		c.notmatched = append(c.notmatched, invocation{sql: "ROLLBACK", stack: string(debug.Stack())})
 		return errors.New(msg)
 	}
 

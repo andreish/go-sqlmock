@@ -18,8 +18,9 @@ type expectation interface {
 }
 
 type invocation struct {
-	sql  string
-	args []driver.NamedValue
+	sql   string
+	args  []driver.NamedValue
+	stack string
 }
 
 // common expectation struct

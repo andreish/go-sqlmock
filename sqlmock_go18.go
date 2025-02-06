@@ -214,7 +214,7 @@ func (c *sqlmock) query(query string, args []driver.NamedValue) (*ExpectedQuery,
 				break
 			}
 			next.Unlock()
-			c.notmatched = append(c.notmatched, invocation{sql: query, args: args})
+			c.notmatched = append(c.notmatched, invocation{sql: query, args: args, stack: string(debug.Stack())})
 			return nil, fmt.Errorf("call to Query '%s' with args %+v, was not expected, next expectation is: %s", query, args, next)
 		}
 		if qr, ok := next.(*ExpectedQuery); ok {
@@ -235,7 +235,7 @@ func (c *sqlmock) query(query string, args []driver.NamedValue) (*ExpectedQuery,
 		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: query, args: args})
+		c.notmatched = append(c.notmatched, invocation{sql: query, args: args, stack: string(debug.Stack())})
 		return nil, fmt.Errorf(msg, query, args)
 	}
 
@@ -299,7 +299,7 @@ func (c *sqlmock) exec(query string, args []driver.NamedValue) (*ExpectedExec, e
 				break
 			}
 			next.Unlock()
-			c.notmatched = append(c.notmatched, invocation{sql: query, args: args})
+			c.notmatched = append(c.notmatched, invocation{sql: query, args: args, stack: string(debug.Stack())})
 			return nil, fmt.Errorf("call to ExecQuery '%s' with args %+v, was not expected, next expectation is: %s", query, args, next)
 		}
 		if exec, ok := next.(*ExpectedExec); ok {
@@ -320,7 +320,7 @@ func (c *sqlmock) exec(query string, args []driver.NamedValue) (*ExpectedExec, e
 		if fulfilled >= len(c.expected) {
 			msg = "all expectations were already fulfilled, " + msg
 		}
-		c.notmatched = append(c.notmatched, invocation{sql: query, args: args})
+		c.notmatched = append(c.notmatched, invocation{sql: query, args: args, stack: string(debug.Stack())})
 		return nil, fmt.Errorf(msg, query, args)
 	}
 	defer expected.Unlock()
